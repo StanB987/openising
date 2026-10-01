@@ -26,7 +26,7 @@ eigenvalue_start: False
 
 # Logging or not
 gen_logfile: False
-logfile_discrimination: None
+logfile_discrimination: ""
 
 #################################
 ## Solvers hyperparameters
@@ -84,6 +84,15 @@ dtdSB: 0.01
 a0: 1.0
 c0: 0.0
 
+## Multi-core Solver hyperparameters
+
+# Parameters for Hierarchical solver
+nb_sweeps: 1
+core_solver: "Multiplicative"
+partitioning_technique: "modularity"
+nb_partitions: 2
+nb_meta_nodes: 1
+
 #################################
 ## Problems hyperparameters
 #################################
@@ -140,6 +149,7 @@ dummy_case_num: 10
 
 # Parameters for dummy Biqmac/Maxcut
 dummy_precision: 6
+dummy_connectivity: 1.0
 
 # Parameters for dummy MaxCut/TSP/ATSP/Knapsack
 dummy_size: 20

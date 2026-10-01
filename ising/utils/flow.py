@@ -2,6 +2,7 @@ import pathlib
 import numpy as np
 from argparse import Namespace
 import scipy.sparse.linalg as spalg
+from copy import deepcopy
 
 from ising.utils.HDF5Logger import return_metadata
 
@@ -10,7 +11,7 @@ from ising.utils.helper_functions import return_rx
 from ising.utils.numpy import triu_to_symm
 
 
-def parse_hyperparameters(args: Namespace) -> dict[str:]:
+def parse_hyperparameters(args: Namespace, model: IsingModel) -> dict[str:]:
     """Parses the arguments needed for the solvers.
 
     Args:
@@ -119,6 +120,16 @@ def parse_hyperparameters(args: Namespace) -> dict[str:]:
     if"bSB" in args.solvers:
         hyperparameters["dtbSB"] = float(args.dtbSB)
 
+    if "Hierarchical_solver" in args.solvers:
+        hyperparameters["nb_sweeps_Hierarchical_solver"] = int(args.nb_sweeps_Hierarchical_solver)
+        hyperparameters["core_solver"] = args.core_solver
+        hyperparameters["partitioning_technique"] = args.partitioning_technique
+        hyperparameters["nb_partitions"] = int(args.nb_partitions)
+        hyperparameters["nb_meta_nodes"] = int(model.num_variables / args.nb_meta_nodes)
+        new_args = deepcopy(args)
+        new_args.solvers = args.core_solver
+        new_hyperparameters = parse_hyperparameters(new_args, model)
+        hyperparameters.update(new_hyperparameters)
     return hyperparameters
 
 
@@ -237,7 +248,7 @@ def approximation_to_best_found(energy: np.ndarray[float], best_found:float) -> 
     @return np.ndarray[float]: the approximation in percentage.
     """
     if best_found != 0.0:
-        return 100*(1 - relative_to_best_found(energy, best_found))
+        return 100*(energy/ best_found)
     else:
         return 1/np.array([en if en != 0 else 1 for en in energy]) * 100
 

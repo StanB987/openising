@@ -20,6 +20,7 @@ from ising.solvers.SA import SASolver
 from ising.solvers.DSA import DSASolver
 from ising.solvers.inSitu_SA import InSituSASolver
 from ising.solvers.Multiplicative import Multiplicative
+from ising.solvers.Hierarchical_solver import HierarchicalSolver
 
 
 class SimulationStage(Stage):
@@ -129,7 +130,7 @@ class SimulationStage(Stage):
     def partial_runs(self, nb_runs: int, logpath: pathlib.Path, initialization_seed: int, start_run_id: int = 0):
         start_time = datetime.datetime.now()
         LOGGER.info(f"Simulation started at {start_time.strftime('%Y-%m-%d %H:%M:%S')}")
-        hyperparameters = parse_hyperparameters(self.config)
+        hyperparameters = parse_hyperparameters(self.config, self.ising_model)
 
         optim_state_collect = {solver: [] for solver in self.config.solvers}
         optim_energy_collect = {solver: [] for solver in self.config.solvers}
@@ -153,7 +154,7 @@ class SimulationStage(Stage):
             else:
                 initial_state = np.random.uniform(-1, 1, (self.ising_model.num_variables,))
             for solver in self.config.solvers:
-                if self.gen_logfile and self.benchmark_abbreviation != "MIMO":
+                if self.gen_logfile:
                     logfile = (
                         logpath
                         / f"{solver}_{self.benchmark_abbreviation}_run{trail_id + start_run_id}{
@@ -269,6 +270,17 @@ class SimulationStage(Stage):
             "bSB": (ballisticSB().solve, ["c0", "dtbSB", "a0", "seed"]),
             "dSB": (discreteSB().solve, ["c0", "dtdSB", "a0", "seed"]),
         }
+        multi_core_solvers = {
+            "Hierarchical_solver": (
+                HierarchicalSolver().solve,
+                [
+                    "core_solver",
+                    "partitioning_technique",
+                    "nb_partitions",
+                    "nb_meta_nodes",
+                ],
+            ),
+        }
         if solver in solvers:
             func, params = solvers[solver]
             chosen_hyperparameters = {key: hyperparameters[key] for key in params if key in hyperparameters}
@@ -285,9 +297,42 @@ class SimulationStage(Stage):
                 file=logfile,
                 **chosen_hyperparameters,
             )
+        elif solver in multi_core_solvers:
+            func, params = multi_core_solvers[solver]
+            core_solver = hyperparameters["core_solver"]
+            chosen_hyperparameters = {key: hyperparameters[key] for key in params if key in hyperparameters}
+            core_func, core_params = solvers[core_solver]
+            chosen_hyperparameters["core_solver_args"] = {
+                key: hyperparameters[key] for key in core_params if key in hyperparameters
+            }
+            chosen_hyperparameters["core_solver"] = core_func
+            if core_solver in ["SA", "SCA", "bSB", "dSB", "inSituSA"]:
+                chosen_hyperparameters["core_solver_args"]["stop_criterion"] = stop_criterion_it
+            chosen_hyperparameters["core_solver_args"]["num_iterations"] = hyperparameters[
+                "num_iterations_" + core_solver if ((core_solver != "bSB") and (core_solver)) else "num_iterations_SB"
+            ]
+            if solver == "Hierarhical_solver":
+                chosen_hyperparameters["nb_meta_nodes"] = (
+                    int(model.num_variables / chosen_hyperparameters["nb_meta_nodes"])
+                    if chosen_hyperparameters["nb_meta_nodes"] > 1
+                    else None
+                )
+            if logfile is not None:
+                parts = logfile.parts
+                filename = parts[-1].split(".")[0] + "_subcore.log"
+                parts[-1] = filename
+                chosen_hyperparameters["core_solver_args"]["file"] = pathlib.Path("/".join(parts))
+            optim_state, optim_energy, computation_time, operation_count, total_iterations = func(
+                model=model,
+                initial_state=s_init,
+                file_multi_core=logfile,
+                nb_sweeps=hyperparameters["nb_sweeps_" + solver],
+                **chosen_hyperparameters,
+            )
         else:
             LOGGER.error(f"Solver {solver} is not implemented.")
             raise NotImplementedError(f"Solver {solver} is not implemented.")
+
         return optim_state, optim_energy, computation_time, operation_count, total_iterations
 
 
