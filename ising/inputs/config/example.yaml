@@ -10,7 +10,7 @@ solvers:
   - bSB
 
 # Number of trials
-nb_runs: 5
+nb_runs: 100
 
 # Use gurobi or not
 use_gurobi: False
@@ -78,7 +78,7 @@ coupling_annealing: True
 probability_start: 0.001799
 
 # Parameters for SB
-num_iterations_SB: 1
+num_iterations_SB: 10000
 dtbSB: 0.01
 dtdSB: 0.01
 a0: 1.0
